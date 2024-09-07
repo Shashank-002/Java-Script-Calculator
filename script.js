@@ -7,21 +7,22 @@ let formatError = false;
 let firstMinusUsed = false; 
 let lastOperator = false; 
 
-function appendToDisplay(value) {
+// Adds the given value (number or operator) to the display
+function addToDisplay(value) {
     const operators = ['+', '-', '*', '/'];
 
     // Handle error states
     if (errorState || formatError) {
-        if (isDigit(value) || value === '.' || value === '-') {
-            clearDisplay(); // Clear on any valid input
+        if (isNumber(value) || value === '.' || value === '-') {
+            resetDisplay(); // Clear on any valid input
             errorState = false;
             formatError = false;
         }
     }
 
-    // Reset if result is shown and number or '.' is pressed
-    if (resultShown && (isDigit(value) || value === '.')) {
-        clearDisplay();
+    // Reset display after result is shown
+    if (resultShown && (isNumber(value) || value === '.')) {
+        resetDisplay();
         resultShown = false;
     } else if (resultShown && operators.includes(value)) {
         resultShown = false;
@@ -32,18 +33,19 @@ function appendToDisplay(value) {
         return;  
     }
 
-    // Handle the '-' operator being used first and another operator after
+    // Handle the first '-' operator and prevent multiple operators
     if (firstMinusUsed && operators.includes(value) && value !== '-') {
-        clearDisplay();  
+        resetDisplay();  
         firstMinusUsed = false; 
         return; 
     }
 
-    if (firstMinusUsed && isDigit(value)) {
+    if (firstMinusUsed && isNumber(value)) {
         firstMinusUsed = false;
     }
 
-    if (isDigit(value) || value === '.') {
+    // Add numbers and dots to the display
+    if (isNumber(value) || value === '.') {
         if (value === '.') {
             if (!dotUsed) {
                 displayValue += value;
@@ -56,12 +58,11 @@ function appendToDisplay(value) {
         lastOperator = false; 
     } else if (operators.includes(value)) {
 
-        // Track if the '-' operator is used first
+        // Handle initial '-' operator
         if (value === '-' && displayValue === '') {
             firstMinusUsed = true; 
             displayValue += value; 
         } else if (lastInputOperator) {
-           
             displayValue = displayValue.slice(0, -1) + value;
         } else {
             displayValue += value;
@@ -103,12 +104,12 @@ document.getElementById('display').addEventListener('input', function (e) {
     displayValue = validInput;
 
     lastInputOperator = /[+\-*/]$/.test(displayValue);
-    lastOperator = lastInputOperator; // Update lastOperator
+    lastOperator = lastInputOperator;
     dotUsed = displayValue.includes('.');
 });
 
-// Clear display
-function clearDisplay() {
+// Reset the display to an empty state
+function resetDisplay() {
     displayValue = '';
     dotUsed = false;
     lastInputOperator = false;
@@ -117,11 +118,10 @@ function clearDisplay() {
     document.getElementById('display').value = displayValue;
 }
 
-// Calculation
-function calculate() {
+// Perform the calculation based on the current input
+function performCalculation() {
     const operators = ['+', '-', '*', '/'];
 
-    // Check if display is empty
     if (displayValue === '') {
         document.getElementById('display').value = ''; 
         return;
@@ -133,25 +133,22 @@ function calculate() {
         return;
     }
 
-
     if (operators.includes(displayValue[displayValue.length - 1])) {
         document.getElementById('display').value = displayValue; 
         formatError = true;  
         return;  
     }
 
-    // Check for a trailing dot followed by an operator
     if (displayValue.endsWith('.') && displayValue.length > 1 && operators.includes(displayValue[displayValue.length - 2])) {
         document.getElementById('display').value = "Format error"; 
         formatError = true; 
         return;
     }
 
-    // Try-catch block for performing the calculation
     try {
-        let tokens = tokenize(displayValue);
-        tokens = handlePrecedence(tokens, ['*', '/']);
-        let result = handlePrecedence(tokens, ['+', '-'])[0];
+        let tokens = splitInputIntoTokens(displayValue);
+        tokens = handleOperatorPrecedence(tokens, ['*', '/']);
+        let result = handleOperatorPrecedence(tokens, ['+', '-'])[0];
 
         if (!isFinite(result)) {
             document.getElementById('display').value = "Can't divide by zero";
@@ -175,9 +172,8 @@ function calculate() {
     }
 }
 
-
-// Helper functions
-function tokenize(input) {
+// Extract tokens (numbers and operators) from the input
+function splitInputIntoTokens(input) {
     let tokens = [];
     let currentNumber = '';
     let previousChar = null;
@@ -185,7 +181,7 @@ function tokenize(input) {
     for (let i = 0; i < input.length; i++) {
         let char = input[i];
 
-        if (isDigit(char) || char === '.') {
+        if (isNumber(char) || char === '.') {
             currentNumber += char;
         } else {
             if (currentNumber) {
@@ -193,7 +189,7 @@ function tokenize(input) {
                 currentNumber = '';
             }
 
-            if (char === '-' && (previousChar === null || !isDigit(previousChar))) {
+            if (char === '-' && (previousChar === null || !isNumber(previousChar))) {
                 currentNumber = '-';
             } else {
                 tokens.push(char);
@@ -209,11 +205,13 @@ function tokenize(input) {
     return tokens;
 }
 
-function isDigit(char) {
+// Check if the character is a number
+function isNumber(char) {
     return /\d/.test(char);
 }
 
-function handlePrecedence(tokens, operators) {
+// Handle operator precedence (e.g., multiply/divide before add/subtract)
+function handleOperatorPrecedence(tokens, operators) {
     let newTokens = [];
     let i = 0;
 
@@ -225,7 +223,7 @@ function handlePrecedence(tokens, operators) {
         } else if (operators.includes(token)) {
             let num1 = newTokens.pop();
             let num2 = tokens[++i];
-            newTokens.push(operate(num1, num2, token));
+            newTokens.push(performOperation(num1, num2, token));
         } else {
             newTokens.push(token);
         }
@@ -235,7 +233,8 @@ function handlePrecedence(tokens, operators) {
     return newTokens;
 }
 
-function operate(num1, num2, operation) {
+// Perform the mathematical operation
+function performOperation(num1, num2, operation) {
     switch (operation) {
         case '+':
             return num1 + num2;
